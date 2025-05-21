@@ -212,6 +212,7 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
 
     bool loaded = false;
     double seconds = 0.0, duration = 0.0;
+    bool paused = false;
     uint32_t width = 0, height = 0;
 
     // the DXGL texture:
@@ -381,6 +382,7 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
             This.Set("duration", duration);
             This.Set("width", width);
             This.Set("height", height);
+            This.Set("paused", paused);
 
             //if (info.Length() > 0 && info[0].IsNumber()) 
             {
@@ -527,6 +529,23 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
         return This;
     }
 
+    Napi::Value pause(const Napi::CallbackInfo& info) {
+		Napi::Env env = info.Env();
+		Napi::Object This = info.This().As<Napi::Object>();
+        
+        paused = info[0].ToBoolean();
+
+        if (paused) {
+            m_engineEx->Pause();
+        } else {
+            m_engineEx->Play();
+        }
+
+        This.Set("paused", paused);
+
+        return This;
+    }
+
     virtual void OnMediaEngineEvent(DWORD meEvent, DWORD_PTR param1, DWORD param2) {
         if (meEvent == MF_MEDIA_ENGINE_EVENT_TIMEUPDATE) return; // keep it quiet
 
@@ -583,6 +602,7 @@ public:
                 Video::InstanceMethod<&Video::load>("load"),
                 Video::InstanceMethod<&Video::update>("update"),
                 Video::InstanceMethod<&Video::seek>("seek"),
+                Video::InstanceMethod<&Video::pause>("pause"),
 
                 Video::InstanceMethod<&Video::bind>("bind"),
                 Video::InstanceMethod<&Video::unbind>("unbind"),
