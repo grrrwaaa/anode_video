@@ -1,0 +1,23 @@
+{
+	"name": "video",
+	"version": "0.0.1",
+	"description": "native node bindings for video playback to GPU",
+	"main": "index.js",
+	"scripts": {
+		"install": "node-gyp rebuild"
+	},
+	"gypfile": true,
+	"author": "Artificial Nature (Haru Ji & Graham Wakefield)",
+	"license": "ISC",
+	"dependencies": {
+		"bindings": "1.5.0",
+		"native-graphics-deps": "0.0.21",
+		"node-addon-api": "^8.3.1"
+	},
+	"nodemonConfig": {
+		"ignore": [
+			"*.json"
+		],
+		"signal": "SIGINT"
+	}
+}
