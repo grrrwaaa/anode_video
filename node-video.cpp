@@ -221,6 +221,8 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
     bool mBLocked = false;
     bool hasTexture = false;
 
+    uint32_t gl_texid = 0;
+
     Napi::Value load(const Napi::CallbackInfo& info) {
 		Napi::Env env = info.Env();
 		Napi::Object This = info.This().As<Napi::Object>();
@@ -380,11 +382,12 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
             This.Set("width", width);
             This.Set("height", height);
 
-            if (info.Length() > 0 && info[0].IsNumber()) {
-                uint32_t texid = info[0].ToNumber().Uint32Value();
+            //if (info.Length() > 0 && info[0].IsNumber()) 
+            {
+                //uint32_t texid = info[0].ToNumber().Uint32Value();
 
                 if (!hasTexture) {
-                    printf("creating textures from %d\n", texid);
+                    //printf("creating textures from %d\n", texid);
 
                     // create it:
                     D3D11_TEXTURE2D_DESC desc = {};
@@ -403,10 +406,11 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
                         return This;
                     }
 
+                    glGenTextures(1, &gl_texid);
                     mGLDX_Handle = wglDXRegisterObjectNV(
                         gl_handleD3D, 
                         mDXTex.Get(),
-                        texid,
+                        gl_texid,
                         GL_TEXTURE_2D, 
                         WGL_ACCESS_READ_ONLY_NV); //WGL_ACCESS_READ_WRITE_NV); //?
 
@@ -415,7 +419,11 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
                         return This;
                     }
 
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, gl_texid);
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
                     auto gl_err = glGetError();
+
                     if (gl_err != GL_NO_ERROR) {
                         // <-- renderdoc seems cause glGetError to be set to GL_INVALID_OPERATION here.
                         // <-- even though the actual call to wglDXRegisterObjectNV has
@@ -428,28 +436,13 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
                         fprintf(stderr, "glGetError triggered.\n");
                     }
 
-                    // D3D11_TEXTURE2D_DESC desc2;
-                    // desc2.Width = desc.Width;
-                    // desc2.Height = desc.Height;
-                    // desc2.MipLevels = desc.MipLevels;
-                    // desc2.ArraySize = desc.ArraySize;
-                    // desc2.Format = desc.Format;
-                    // desc2.SampleDesc = desc.SampleDesc;
-                    // desc2.Usage = D3D11_USAGE_STAGING;
-                    // desc2.BindFlags = 0;
-                    // desc2.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
-                    // desc2.MiscFlags = 0;
-                    // if (FAILED(m_spDX11Device->CreateTexture2D(&desc2, nullptr, &stagingTexture))) {
-                    //     fprintf(stderr, "failed to create staging texture");
-                    //     return This;
-                    // }
+                    This.Set("id", gl_texid);
 
                     hasTexture = true;
                 }
             }
 
             if (hasTexture && mGLDX_Handle) {
-
                 
                 wglDXUnlockObjectsNV(gl_handleD3D, 1, &mGLDX_Handle);
 
@@ -486,6 +479,36 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
            
         HRESULT hr = S_OK;
 
+
+        return This;
+    }
+
+    Napi::Value bind(const Napi::CallbackInfo& info) {
+		Napi::Env env = info.Env();
+		Napi::Object This = info.This().As<Napi::Object>();
+
+        uint32_t unit = info[0].ToNumber().Uint32Value();
+        
+        if (gl_texid) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, gl_texid);
+        }
+    
+
+        return This;
+    }
+
+    Napi::Value unbind(const Napi::CallbackInfo& info) {
+		Napi::Env env = info.Env();
+		Napi::Object This = info.This().As<Napi::Object>();
+
+        uint32_t unit = info[0].ToNumber().Uint32Value();
+        
+        if (gl_texid) {
+            glActiveTexture(GL_TEXTURE0 + unit);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+    
 
         return This;
     }
@@ -560,6 +583,9 @@ public:
                 Video::InstanceMethod<&Video::load>("load"),
                 Video::InstanceMethod<&Video::update>("update"),
                 Video::InstanceMethod<&Video::seek>("seek"),
+
+                Video::InstanceMethod<&Video::bind>("bind"),
+                Video::InstanceMethod<&Video::unbind>("unbind"),
             });
 
             // Create a persistent reference to the class constructor.
