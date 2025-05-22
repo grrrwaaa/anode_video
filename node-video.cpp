@@ -196,9 +196,18 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
     Video(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Video>(info) {
 		Napi::Env env = info.Env();
 		Napi::Object This = info.This().As<Napi::Object>();
+
         // if (info.Length() > 0 && info[0].IsString()) {
         //     sender.SetSenderName(info[0].ToString().Utf8Value().c_str());
         // }
+
+
+        This.Set("duration", duration);
+        This.Set("width", width);
+        This.Set("height", height);
+        This.Set("paused", paused);
+        This.Set("loop", loop);
+
 	}
 
     ~Video() {
@@ -214,6 +223,7 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
     double seconds = 0.0, duration = 0.0;
     bool paused = false;
     uint32_t width = 0, height = 0;
+    bool loop = true;
 
     // the DXGL texture:
     ComPtr<ID3D11Texture2D> mDXTex{ nullptr };
@@ -346,11 +356,12 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
                 return This;
             }
 
+
             printf("initialized\n");
         }
 
         m_mediaEngine->SetAutoPlay(true);
-        m_mediaEngine->SetLoop(true);
+        m_mediaEngine->SetLoop(This.Get("loop").ToBoolean());
 
         if (FAILED(m_mediaEngine->SetSource(bfilename))) {
             fprintf(stderr, "error m_mediaEngine->SetSource\n");
@@ -360,6 +371,8 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
             fprintf(stderr, "error m_mediaEngine->SetSource\n");
             return This;
         }
+
+        
 
         printf("loaded and ready\n");
 
@@ -372,13 +385,15 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
 
         if (!loaded || !m_mediaEngine->HasVideo()) return This;
 
+        seconds = m_mediaEngine->GetCurrentTime();
+        This.Set("seconds", seconds);
+        
         // is a new frame ready?
         LONGLONG time;
         if (m_mediaEngine->OnVideoStreamTick(&time) == S_OK) {
-            seconds = time * 1e-7;
+            seconds = m_mediaEngine->GetCurrentTime();//time * 1e-7;
             //printf("time %f\n", seconds);
-
-            This.Set("seconds", seconds);
+            
             This.Set("duration", duration);
             This.Set("width", width);
             This.Set("height", height);
@@ -524,7 +539,7 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
         if (t < 0) t = 0.;
         if (t > duration) t = duration;
 
-        m_engineEx->SetCurrentTimeEx(t, MF_MEDIA_ENGINE_SEEK_MODE_NORMAL);
+        if (m_engineEx) m_engineEx->SetCurrentTimeEx(t, MF_MEDIA_ENGINE_SEEK_MODE_NORMAL);
 
         return This;
     }
@@ -535,10 +550,12 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
         
         paused = info[0].ToBoolean();
 
-        if (paused) {
-            m_engineEx->Pause();
-        } else {
-            m_engineEx->Play();
+        if (m_engineEx) {
+            if (paused) {
+                m_engineEx->Pause();
+            } else {
+                m_engineEx->Play();
+            }
         }
 
         This.Set("paused", paused);
@@ -561,6 +578,8 @@ struct Video : public Napi::ObjectWrap<Video>, public MediaEngineNotifyCallback 
                     height = h;
                 }
                 loaded = true;
+                
+                //m_engineEx->SetCurrentTimeEx(seconds, MF_MEDIA_ENGINE_SEEK_MODE_NORMAL);
                 break;
             }
             case MF_MEDIA_ENGINE_EVENT_ERROR:
